@@ -2,8 +2,8 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>新年團圓問答戳戳樂 - 進階版挑戰</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>新年團圓問答戳戳樂 - 手機優化版</title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- React & ReactDOM CDN -->
@@ -18,6 +18,7 @@
         body {
             font-family: 'Noto Sans TC', sans-serif;
             -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
         }
         .animate-in {
             animation: fadeIn 0.4s ease-out forwards;
@@ -30,8 +31,13 @@
             animation: stamp 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
         }
         @keyframes stamp {
-            0% { transform: scale(3) rotate(30deg); opacity: 0; }
+            0% { transform: scale(2.5) rotate(30deg); opacity: 0; }
             100% { transform: scale(1) rotate(15deg); opacity: 1; }
+        }
+        /* 避免長輩誤點造成文字被選取 */
+        .no-select {
+            user-select: none;
+            -webkit-user-select: none;
         }
     </style>
 </head>
@@ -41,8 +47,8 @@
     <script type="text/babel">
         const { useState, useRef, useEffect } = React;
 
-        // 小組件：模擬 Lucide React 圖示
-        const Icon = ({ name, size = 24, className = "", fill = "none" }) => {
+        // 小組件：模擬 Lucide React 圖示 (優化響應式尺寸處理)
+        const Icon = ({ name, size = "100%", className = "", fill = "none" }) => {
             const [svg, setSvg] = useState("");
             useEffect(() => {
                 if (window.lucide && window.lucide.icons) {
@@ -73,23 +79,20 @@
                     }
                 }
             }, [name, size, className, fill]);
-            return <div dangerouslySetInnerHTML={{ __html: svg }} />;
+            return <div dangerouslySetInnerHTML={{ __html: svg }} className="inline-block leading-[0]" />;
         };
 
-        // 音效控制
         const playSound = (type) => {
             try {
                 const ctx = new (window.AudioContext || window.webkitAudioContext)();
                 const osc = ctx.createOscillator();
                 const gain = ctx.createGain();
-                osc.connect(gain);
-                gain.connect(ctx.destination);
-
+                osc.connect(gain); gain.connect(ctx.destination);
                 if (type === 'poke') {
                     osc.type = 'sine';
                     osc.frequency.setValueAtTime(400, ctx.currentTime);
                     osc.frequency.exponentialRampToValueAtTime(50, ctx.currentTime + 0.1);
-                    gain.gain.setValueAtTime(0.5, ctx.currentTime);
+                    gain.gain.setValueAtTime(0.3, ctx.currentTime);
                     gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.1);
                     osc.start(); osc.stop(ctx.currentTime + 0.1);
                 } else if (type === 'success') {
@@ -97,7 +100,7 @@
                     osc.frequency.setValueAtTime(523, ctx.currentTime); 
                     osc.frequency.setValueAtTime(659, ctx.currentTime + 0.1);
                     osc.frequency.setValueAtTime(783, ctx.currentTime + 0.2);
-                    gain.gain.setValueAtTime(0.2, ctx.currentTime);
+                    gain.gain.setValueAtTime(0.15, ctx.currentTime);
                     gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.4);
                     osc.start(); osc.stop(ctx.currentTime + 0.4);
                 } else if (type === 'error') {
@@ -111,36 +114,37 @@
             } catch (e) { console.error("Audio error", e); }
         };
 
+        const topics = [
+            { id: 1, name: '壓歲錢由來', question: '相傳「壓歲錢」最初是用來壓住哪種愛在除夕夜嚇小孩的妖怪？', options: ['名為「祟」的妖怪', '兇猛的「年獸」', '專偷錢的「窮鬼」'], correct: 0, story: '「歲」與「祟」同音，古人用紅包壓在小孩枕頭下，是為了保護孩子不被「祟」這隻妖怪驚嚇，稱為壓「祟」錢。' },
+            { id: 2, name: '吃魚的規矩', question: '在台灣年夜飯吃魚時，為了「年年有餘」，最正確的做法是？', options: ['要把魚眼和魚鰓吃掉', '留下頭尾到隔天（初一）吃', '把魚骨頭磨成粉吃掉'], correct: 1, story: '留下魚頭和魚尾代表「有頭有尾」，象徵整年都有餘裕，這才是台灣最正宗的「年年有餘」。' },
+            { id: 3, name: '長年菜差異', question: '台灣南北長年菜大不同！南部人（如台南、高雄）過年通常吃哪種帶根的蔬菜？', options: ['大葉芥菜', '結球白菜', '整株帶根的菠菜'], correct: 2, story: '北部通常吃芥菜，越煮越甜；南部則吃帶根菠菜，象徵長壽與「有根基」。記住，長年菜不能咬斷喔！' },
+            { id: 4, name: '賄賂灶神', question: '農曆十二月廿四是「送神日」，為了讓灶神上天庭說好話，通常會準備？', options: ['甜食或黏牙的糖果', '嗆辣的辣椒', '清淡的苦茶'], correct: 0, story: '準備甜食或黏牙的麥芽糖，是希望灶神嘴巴甜一點，回天庭只說好話，或者被黏住嘴巴說不出壞話！' },
+            { id: 5, name: '爆竹的真面目', question: '為什麼放鞭炮要叫「爆竹」？在紙張發明前，古人是真的燃燒什麼？', options: ['乾燥的松果', '真實的竹節', '曬乾的紅豆'], correct: 1, story: '古人最初是燃燒真實的竹子，利用竹節受熱爆裂產生的巨大響聲來驅邪避災，所以才叫「爆竹」。' },
+            { id: 6, name: '人日節氣', question: '正月初七是「人日」（人類的生日），依照古老習俗這天要吃什麼來長壽？', options: ['七種肉做的火鍋', '七種蔬菜做的「七寶羹」', '七顆大紅棗'], correct: 1, story: '正月初七是人類的生日。習俗上會吃七種蔬菜（如芹菜、蒜、蔥等諧音菜）熬成的羹，用來驅邪祈福。' },
+            { id: 7, name: '伴手禮禁忌', question: '初二回娘家，送給父母的伴手禮（回門禮），在數量上有什麼禁忌？', options: ['一定要單數代表唯一', '一定要雙數象徵圓滿', '只要是 4 就好'], correct: 1, story: '伴手禮必須是「雙數」，因為單數代表孤單不吉；雙數則象叢成雙成對。另外，送 4 通常也會避開喔。' },
+            { id: 8, name: '倒貼春聯', question: '在台灣習俗中，哪種地方的「福」字或「財」字春聯通常可以倒過來貼？', options: ['家裡大門口', '家中的窗戶', '米缸、水缸或酒缸'], correct: 2, story: '大門福字要正貼。只有米缸等容器可以倒貼，象徵「福氣倒進家裡」且已經裝滿了，倒與「到」諧音。' },
+            { id: 9, name: '旺來諧音', question: '台灣過年必拜鳳梨，除了代表「旺來」，在閩南語中還有什麼隱含意義？', options: ['代表子孫滿堂', '諧音「王爺來」代表庇佑', '代表財源旺盛'], correct: 1, story: '在閩南語中，鳳梨音近「旺來」，也有「王爺來（指神明降臨）」之意，是求財與求平安的首選。' },
+            { id: 10, name: '五路財神', question: '初五要「迎財神」，請問這「五路」是指哪些方位？', options: ['金、木、水、火、土', '東、西、南、北、中', '天、地、玄、黃、中'], correct: 1, story: '五路財神代表東、西、南、北、中五個方位，象徵出門不論往哪個方向，都能招財進寶。' },
+            { id: 11, name: '打破碗處理', question: '過年不小心打破碗盤時，除了說「歲歲平安」，碎片應該怎麼處理？', options: ['用紅紙包好放在安全處', '立刻拿去外面水溝丟掉', '對著碎片唱新年歌'], correct: 0, story: '傳統上要用紅紙將碎片包起來，放在神案或安全處，等到初五「隔開」後再處理，代表化凶為吉。' },
+            { id: 12, name: '春聯貼法', question: '貼春聯時，面對大門口的「右手邊」應該貼什麼聯？', options: ['上聯（最後一字是三、四聲）', '下聯（最後一字是一、二聲）', '橫批'], correct: 0, story: '台灣春聯張貼順序是「右為上」。判斷方法是看最後一個字，上聯通常是「仄聲」（三四聲），貼在右手邊。' },
+            { id: 13, name: '元宵製作', question: '正月十五元宵節，北方的「搖元宵」與南方的「包湯圓」最大的不同是？', options: ['內餡有沒有加肉', '一個用蒸的一個用炸的', '一個是用滾粉的、一個是用包餡的'], correct: 2, story: '元宵是在篩子裡「搖」出來沾粉的，口感較硬；湯圓則是像水餃一樣用皮「包」出來的，口感較軟Q。' },
+            { id: 14, name: '守歲的意義', question: '「守歲」對孩子與晚輩來說，最核心的傳統寓意是什麼？', options: ['為了守住家裡的財寶不被偷', '為了幫父母祈求長壽', '為了等半夜財神來敲門'], correct: 1, story: '對孩子而言，除夕守歲越晚睡，象徵幫父母祈求的福壽就越長長久久，是一份孝心的展現。' },
+            { id: 15, name: '全盒內容', question: '過年招待客人的「全盒」（糖果盒），傳統上格數通常是多少最吉利？', options: ['單數（如 5 格）代表五福臨門', '偶數（如 4 格）代表事事如意', '沒有格數規定'], correct: 0, story: '全盒通常取「單數」格，最常見的是 5 格，象徵「五福臨門」。裡面放的紅瓜子代表紅紅火火。' },
+            { id: 16, name: '初四迎神', question: '大年初四是「迎神日」，相傳這天神明會回到民間做什麼？', options: ['檢查家裡的整潔度', '品嚐各家的年夜飯剩菜', '查點這家人的戶口與善惡紀錄'], correct: 2, story: '初四是眾神從天庭回到人間的日子，神明會查察這家人是否勤勞與善良，決定新一年的福報。' }
+        ];
+
         const App = () => {
             const [openedHoles, setOpenedHoles] = useState([]);
             const [activeHole, setActiveHole] = useState(null);
             const [gameState, setGameState] = useState('grid'); 
             const [quizResult, setQuizResult] = useState(null);
 
-            const topics = [
-                { id: 1, name: '壓歲錢由來', question: '相傳「壓歲錢」最初是用來壓住哪種愛在除夕夜嚇小孩的妖怪？', options: ['名為「祟」的妖怪', '兇猛的「年獸」', '專偷錢的「窮鬼」'], correct: 0, story: '「歲」與「祟」同音，古人用紅包壓在小孩枕頭下，是為了保護孩子不被「祟」這隻妖怪驚嚇，稱為壓「祟」錢。' },
-                { id: 2, name: '吃魚的規矩', question: '在台灣年夜飯吃魚時，為了「年年有餘」，最正確的做法是？', options: ['要把魚眼和魚鰓吃掉', '留下頭尾到隔天（初一）吃', '把魚骨頭磨成粉吃掉'], correct: 1, story: '留下魚頭和魚尾代表「有頭有尾」，象徵整年都有餘裕，這才是台灣最正宗的「年年有餘」。' },
-                { id: 3, name: '長年菜差異', question: '台灣南北長年菜大不同！南部人（如台南、高雄）過年通常吃哪種帶根的蔬菜？', options: ['大葉芥菜', '結球白菜', '整株帶根的菠菜'], correct: 2, story: '北部通常吃芥菜，越煮越甜；南部則吃帶根菠菜，象徵長壽與「有根基」。記住，長年菜不能咬斷喔！' },
-                { id: 4, name: '賄賂灶神', question: '農曆十二月廿四是「送神日」，為了讓灶神上天庭說好話，通常會準備？', options: ['甜食或黏牙的糖果', '嗆辣的辣椒', '清淡的苦茶'], correct: 0, story: '準備甜食或黏牙的麥芽糖，是希望灶神嘴巴甜一點，回天庭只說好話，或者被黏住嘴巴說不出壞話！' },
-                { id: 5, name: '爆竹的真面目', question: '為什麼放鞭炮要叫「爆竹」？在紙張發明前，古人是真的燃燒什麼？', options: ['乾燥的松果', '真實的竹節', '曬乾的紅豆'], correct: 1, story: '古人最初是燃燒真實的竹子，利用竹節受熱爆裂產生的巨大響聲來驅邪避災，所以才叫「爆竹」。' },
-                { id: 6, name: '人日節氣', question: '正月初七是「人日」（人類的生日），依照古老習俗這天要吃什麼來長壽？', options: ['七種肉做的火鍋', '七種蔬菜做的「七寶羹」', '七顆大紅棗'], correct: 1, story: '正月初七是人類的生日。習俗上會吃七種蔬菜（如芹菜、蒜、蔥等諧音菜）熬成的羹，用來驅邪祈福。' },
-                { id: 7, name: '伴手禮禁忌', question: '初二回娘家，送給父母的伴手禮（回門禮），在數量上有什麼禁忌？', options: ['一定要單數代表唯一', '一定要雙數象徵圓滿', '只要是 4 就好'], correct: 1, story: '伴手禮必須是「雙數」，因為單數代表孤單不吉；雙數則象徵成雙成對。另外，送 4 通常也會避開喔。' },
-                { id: 8, name: '倒貼春聯', question: '在台灣習俗中，哪種地方的「福」字或「財」字春聯通常可以倒過來貼？', options: ['家裡大門口', '家中的窗戶', '米缸、水缸或酒缸'], correct: 2, story: '大門福字要正貼。只有米缸等容器可以倒貼，象徵「福氣倒進家裡」且已經裝滿了，倒與「到」諧音。' },
-                { id: 9, name: '旺來諧音', question: '台灣過年必拜鳳梨，除了代表「旺來」，在閩南語中還有什麼隱含意義？', options: ['代表子孫滿堂', '諧音「王爺來」代表庇佑', '代表財源旺盛'], correct: 1, story: '在閩南語中，鳳梨音近「旺來」，也有「王爺來（指神明降臨）」之意，是求財與求平安的首選。' },
-                { id: 10, name: '五路財神', question: '初五要「迎財神」，請問這「五路」是指哪些方位？', options: ['金、木、水、火、土', '東、西、南、北、中', '天、地、玄、黃、中'], correct: 1, story: '五路財神代表東、西、南、北、中五個方位，象徵出門不論往哪個方向，都能招財進寶。' },
-                { id: 11, name: '打破碗處理', question: '過年不小心打破碗盤時，除了說「歲歲平安」，碎片應該怎麼處理？', options: ['用紅紙包好放在安全處', '立刻拿去外面水溝丟掉', '對著碎片唱新年歌'], correct: 0, story: '傳統上要用紅紙將碎片包起來，放在神案或安全處，等到初五「隔開」後再處理，代表化凶為吉。' },
-                { id: 12, name: '春聯貼法', question: '貼春聯時，面對大門口的「右手邊」應該貼什麼聯？', options: ['上聯（最後一字是三、四聲）', '下聯（最後一字是一、二聲）', '橫批'], correct: 0, story: '台灣春聯張貼順序是「右為上」。判斷方法是看最後一個字，上聯通常是「仄聲」（三四聲），貼在右手邊。' },
-                { id: 13, name: '元宵製作', question: '正月十五元宵節，北方的「搖元宵」與南方的「包湯圓」最大的不同是？', options: ['內餡有沒有加肉', '一個用蒸的一個用炸的', '一個是用滾粉的、一個是用包餡的'], correct: 2, story: '元宵是在篩子裡「搖」出來沾粉的，口感較硬；湯圓則是像水餃一樣用皮「包」出來的，口感較軟Q。' },
-                { id: 14, name: '守歲的意義', question: '「守歲」對孩子與晚輩來說，最核心的傳統寓意是什麼？', options: ['為了守住家裡的財寶不被偷', '為了幫父母祈求長壽', '為了等半夜財神來敲門'], correct: 1, story: '對孩子而言，除夕守歲越晚睡，象徵幫父母祈求的福壽就越長長久久，是一份孝心的展現。' },
-                { id: 15, name: '全盒內容', question: '過年招待客人的「全盒」（糖果盒），傳統上格數通常是多少最吉利？', options: ['單數（如 5 格）代表五福臨門', '偶數（如 4 格）代表事事如意', '沒有格數規定'], correct: 0, story: '全盒通常取「單數」格，最常見的是 5 格，象徵「五福臨門」。裡面放的紅瓜子代表紅紅火火。' },
-                { id: 16, name: '初四迎神', question: '大年初四是「迎神日」，相傳這天神明會回到民間做什麼？', options: ['檢查家裡的整潔度', '品嚐各家的年夜飯剩菜', '查點這家人的戶口與善惡紀錄'], correct: 2, story: '初四是眾神從天庭回到人間的日子，神明會查察這家人是否勤勞與善良，決定新一年的福報。' }
-            ];
-
             const handlePoke = (index) => {
                 if (openedHoles.includes(index)) return;
                 setActiveHole(topics[index]);
                 setGameState('quiz');
                 playSound('poke');
+                window.scrollTo({ top: 0, behavior: 'smooth' });
             };
 
             const handleAnswer = (idx) => {
@@ -151,10 +155,10 @@
                     setQuizResult('wrong');
                     playSound('error');
                 }
-                
                 const currentIdx = topics.findIndex(t => t.id === activeHole.id);
                 setOpenedHoles(prev => [...new Set([...prev, currentIdx])]);
                 setGameState('result');
+                window.scrollTo({ top: 0, behavior: 'smooth' });
             };
 
             const resetGame = () => {
@@ -164,24 +168,24 @@
             };
 
             return (
-                <div className="min-h-screen bg-[#fff5f5] p-4 md:p-8 select-none">
+                <div className="min-h-screen bg-[#fff5f5] px-3 py-6 md:p-8 no-select">
                     <div className="max-w-2xl mx-auto">
-                        <header className="text-center mb-8">
-                            <h1 className="text-4xl md:text-5xl font-black text-red-800 mb-2 flex items-center justify-center gap-3">
-                                <Icon name="Gift" className="text-red-600 animate-bounce" size={48} />
+                        <header className="text-center mb-6 md:mb-10">
+                            <h1 className="text-3xl md:text-5xl font-black text-red-800 mb-2 flex items-center justify-center gap-2">
+                                <Icon name="Gift" className="text-red-600 animate-bounce w-9 h-9 md:w-12 md:h-12" />
                                 新年團圓戳戳樂
                             </h1>
-                            <p className="text-2xl text-amber-900 font-bold opacity-80 italic">春節冷知識挑戰 · 全家動腦慶團圓</p>
-                            <div className="mt-6">
-                                <div className="inline-block bg-white px-8 py-3 rounded-full shadow-lg border-4 border-red-200 font-black text-2xl text-red-700">
-                                    挑戰進度：{openedHoles.length} / 16
+                            <p className="text-lg md:text-2xl text-amber-900 font-bold opacity-80">春節冷知識挑戰 · 全家動腦慶團圓</p>
+                            <div className="mt-4">
+                                <div className="inline-block bg-white px-6 py-2 rounded-full shadow-md border-2 md:border-4 border-red-200 font-black text-xl md:text-2xl text-red-700">
+                                    進度：{openedHoles.length} / 16
                                 </div>
                             </div>
                         </header>
 
                         {/* 遊戲網格 */}
                         {gameState === 'grid' && (
-                            <div className="grid grid-cols-4 gap-3 md:gap-6 bg-red-100/20 p-5 rounded-[40px] shadow-inner border-2 border-red-50 animate-in">
+                            <div className="grid grid-cols-4 gap-2 md:gap-6 bg-red-100/20 p-3 md:p-6 rounded-[30px] md:rounded-[50px] shadow-inner border border-red-50 animate-in">
                                 {topics.map((attr, index) => {
                                     const isOpened = openedHoles.includes(index);
                                     return (
@@ -190,23 +194,23 @@
                                             onClick={() => handlePoke(index)}
                                             disabled={isOpened}
                                             className={`
-                                                relative aspect-square rounded-[24px] transition-all duration-300
+                                                relative aspect-square rounded-[18px] md:rounded-[28px] transition-all duration-300
                                                 ${isOpened 
-                                                    ? 'bg-stone-200 border-stone-300 border-b-2 scale-95' 
-                                                    : 'bg-gradient-to-br from-red-600 to-orange-700 hover:from-red-500 hover:to-orange-600 active:scale-90 border-red-800 border-b-[8px] shadow-lg'
+                                                    ? 'bg-stone-200 border-stone-300 border-b-2 scale-95 shadow-inner' 
+                                                    : 'bg-gradient-to-br from-red-600 to-orange-700 active:scale-95 border-red-800 border-b-[6px] md:border-b-[10px] shadow-md'
                                                 }
                                                 flex flex-col items-center justify-center overflow-hidden
                                             `}
                                         >
                                             {isOpened ? (
-                                                <div className="flex flex-col items-center justify-center w-full h-full p-1 bg-stone-100">
-                                                    <span className="text-[10px] md:text-xs font-bold text-stone-500 text-center leading-tight mb-1">{attr.name}</span>
-                                                    <div className="stamp-effect border-[4px] border-orange-500 text-orange-600 font-black text-sm md:text-base px-2 py-0.5 rounded-lg rotate-[15deg] bg-white/50 backdrop-blur-sm">
+                                                <div className="flex flex-col items-center justify-center w-full h-full p-1">
+                                                    <span className="text-[8px] md:text-xs font-bold text-stone-500 text-center leading-tight mb-1">{attr.name}</span>
+                                                    <div className="stamp-effect border-[2px] md:border-[4px] border-orange-500 text-orange-600 font-black text-[10px] md:text-base px-1 md:px-2 py-0.5 rounded-md rotate-[15deg] bg-white/50 backdrop-blur-sm">
                                                         大吉
                                                     </div>
                                                 </div>
                                             ) : (
-                                                <span className="text-4xl md:text-6xl font-black text-white/40 drop-shadow-sm">{index + 1}</span>
+                                                <span className="text-2xl md:text-6xl font-black text-white/40">{index + 1}</span>
                                             )}
                                         </button>
                                     );
@@ -216,65 +220,65 @@
 
                         {/* 問答畫面 */}
                         {gameState === 'quiz' && activeHole && (
-                            <div className="bg-white rounded-[50px] p-8 shadow-2xl border-b-[20px] border-red-100 animate-in">
-                                <div className="bg-red-50 p-6 rounded-[30px] border-2 border-red-100 mb-8">
-                                    <h2 className="text-4xl font-black text-red-800 flex items-center gap-3">
-                                        <Icon name="Search" size={36} className="text-red-700" />
+                            <div className="bg-white rounded-[35px] md:rounded-[60px] p-5 md:p-10 shadow-xl border-b-[10px] md:border-b-[20px] border-red-100 animate-in">
+                                <div className="bg-red-50 p-4 md:p-8 rounded-[25px] md:rounded-[40px] border border-red-100 mb-6 md:mb-10">
+                                    <h2 className="text-2xl md:text-4xl font-black text-red-800 flex items-center gap-2">
+                                        <Icon name="Search" className="text-red-700 w-7 h-7 md:w-9 md:h-9" />
                                         挑戰：{activeHole.name}
                                     </h2>
                                 </div>
-                                <p className="text-3xl md:text-4xl mb-10 leading-snug text-stone-800 font-black">
+                                <p className="text-xl md:text-4xl mb-8 md:mb-12 leading-snug text-stone-800 font-black">
                                     {activeHole.question}
                                 </p>
-                                <div className="grid gap-5">
+                                <div className="grid gap-3 md:gap-6">
                                     {activeHole.options.map((option, idx) => (
                                         <button
                                             key={idx}
                                             onClick={() => handleAnswer(idx)}
-                                            className="w-full text-left p-6 md:p-8 text-2xl md:text-3xl font-black rounded-[30px] bg-stone-50 hover:bg-orange-50 active:bg-orange-100 border-4 border-stone-100 hover:border-orange-300 transition-all flex items-center gap-6 shadow-md group"
+                                            className="w-full text-left p-4 md:p-8 text-lg md:text-3xl font-black rounded-[20px] md:rounded-[35px] bg-stone-50 active:bg-orange-100 border-2 md:border-4 border-stone-100 shadow-sm flex items-center gap-3 md:gap-8 transition-all"
                                         >
-                                            <span className="w-14 h-14 bg-red-700 text-white rounded-2xl flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform text-3xl font-black">
+                                            <span className="w-10 h-10 md:w-16 md:h-16 bg-red-700 text-white rounded-xl md:rounded-2xl flex items-center justify-center flex-shrink-0 text-xl md:text-4xl font-black shadow-md">
                                                 {String.fromCharCode(65 + idx)}
                                             </span>
-                                            {option}
+                                            <span className="flex-1">{option}</span>
                                         </button>
                                     ))}
                                 </div>
                             </div>
                         )}
 
-                        {/* 結果與小知識畫面 */}
+                        {/* 結果畫面 */}
                         {gameState === 'result' && activeHole && (
-                            <div className={`bg-white rounded-[50px] p-8 shadow-2xl border-b-[24px] animate-in ${quizResult === 'correct' ? 'border-yellow-400' : 'border-blue-400'}`}>
+                            <div className={`bg-white rounded-[35px] md:rounded-[60px] p-5 md:p-10 shadow-xl border-b-[12px] md:border-b-[24px] animate-in ${quizResult === 'correct' ? 'border-yellow-400' : 'border-blue-400'}`}>
                                 <div className="text-center">
                                     {quizResult === 'correct' ? (
-                                        <div className="mb-8">
-                                            <div className="bg-yellow-100 w-40 h-40 rounded-full flex items-center justify-center mx-auto border-4 border-yellow-200 shadow-lg mb-4">
-                                                <Icon name="Trophy" className="text-yellow-500 animate-bounce" size={80} fill="#fbbf24" />
+                                        <div className="mb-6 md:mb-10">
+                                            <div className="bg-yellow-100 w-28 h-28 md:w-48 md:h-48 rounded-full flex items-center justify-center mx-auto border-4 border-yellow-200 shadow-md mb-4">
+                                                <Icon name="Trophy" className="text-yellow-500 animate-bounce w-14 h-14 md:w-24 md:h-24" fill="#fbbf24" />
                                             </div>
-                                            <h2 className="text-6xl font-black text-yellow-600">真內行！答對了</h2>
+                                            <h2 className="text-3xl md:text-7xl font-black text-yellow-600">真內行！答對了</h2>
                                         </div>
                                     ) : (
-                                        <div className="mb-8">
-                                            <div className="bg-blue-100 w-40 h-40 rounded-full flex items-center justify-center mx-auto border-4 border-blue-200 shadow-lg mb-4">
-                                                <Icon name="HelpCircle" className="text-blue-500" size={80} />
+                                        <div className="mb-6 md:mb-10">
+                                            <div className="bg-blue-100 w-28 h-28 md:w-48 md:h-48 rounded-full flex items-center justify-center mx-auto border-4 border-blue-200 shadow-md mb-4">
+                                                <Icon name="HelpCircle" className="text-blue-500 w-14 h-14 md:w-24 md:h-24" />
                                             </div>
-                                            <h2 className="text-5xl font-black text-blue-600">學到一招囉！</h2>
+                                            <h2 className="text-3xl md:text-6xl font-black text-blue-600">學到一招囉！</h2>
                                         </div>
                                     )}
 
-                                    <div className="bg-amber-50 p-8 rounded-[40px] border-4 border-amber-100 text-left shadow-inner mb-10">
-                                        <h3 className="text-2xl font-black text-amber-900 mb-4 flex items-center gap-2">
+                                    <div className="bg-amber-50 p-5 md:p-10 rounded-[25px] md:rounded-[50px] border-2 md:border-4 border-amber-100 text-left shadow-inner mb-8 md:mb-14">
+                                        <h3 className="text-lg md:text-3xl font-black text-amber-900 mb-3 md:mb-6 flex items-center gap-2">
                                             🏮 習俗典故知多少？
                                         </h3>
-                                        <p className="text-2xl md:text-3xl text-stone-700 font-bold leading-relaxed">
+                                        <p className="text-base md:text-4xl text-stone-700 font-bold leading-relaxed">
                                             {activeHole.story}
                                         </p>
                                     </div>
 
                                     <button
                                         onClick={() => setGameState('grid')}
-                                        className="bg-red-700 text-white text-3xl font-black px-16 py-8 rounded-[40px] shadow-xl hover:bg-red-800 active:scale-95 transition-all w-full md:w-auto border-b-[10px] border-red-900"
+                                        className="bg-red-700 text-white text-xl md:text-4xl font-black px-10 md:px-24 py-4 md:py-10 rounded-[25px] md:rounded-[50px] shadow-lg active:scale-95 transition-all w-full md:w-auto border-b-[6px] md:border-b-[14px] border-red-900"
                                     >
                                         接續新年好運！
                                     </button>
@@ -284,12 +288,12 @@
 
                         {/* 重置按鈕 */}
                         {gameState === 'grid' && openedHoles.length > 0 && (
-                            <div className="mt-16 text-center">
+                            <div className="mt-10 md:mt-20 text-center">
                                 <button
                                     onClick={resetGame}
-                                    className="px-12 py-4 bg-white border-2 border-red-200 rounded-full text-stone-500 font-black hover:bg-red-50 hover:text-red-700 transition-all text-2xl flex items-center gap-4 mx-auto shadow-md"
+                                    className="px-8 py-3 bg-white border-2 border-red-200 rounded-full text-stone-500 font-black active:bg-red-50 transition-all text-lg md:text-3xl flex items-center gap-2 mx-auto shadow-sm"
                                 >
-                                    <Icon name="RotateCcw" size={28} />
+                                    <Icon name="RotateCcw" className="w-6 h-6 md:w-8 md:h-8" />
                                     重新開始遊戲
                                 </button>
                             </div>
